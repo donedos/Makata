@@ -1,0 +1,16 @@
+# GPU overlay — enable NVIDIA CUDA passthrough.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Requires the NVIDIA driver + nvidia-container-toolkit on the host
+# (Docker Desktop handles this on Windows/Mac).
+
+services:
+  makata:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

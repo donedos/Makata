@@ -1,0 +1,18 @@
+services:
+  makata:
+    build: .
+    image: makata:latest
+    container_name: makata
+    ports:
+      - "8300:8300"
+    volumes:
+      # voices, reference samples, outputs, downloaded model weights
+      - makata-data:/data
+    environment:
+      MAKATA_ENGINE: ${MAKATA_ENGINE:-omni}       # omni | xtts
+      MAKATA_DEVICE: ${MAKATA_DEVICE:-auto}       # auto | cuda | cpu
+      MAKATA_OMNI_NUM_STEP: ${MAKATA_OMNI_NUM_STEP:-32}
+    restart: unless-stopped
+
+volumes:
+  makata-data:

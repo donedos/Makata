@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local voice corpus and downloaded model/runtime data
+Voices/
+data/*
+!data/.gitkeep
+
+# Generated local tooling files
+.pytest_cache/
+.coverage
+*.wav
+*.mp3

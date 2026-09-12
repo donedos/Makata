@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+coqui-tts[codec]>=0.27.5
+omnivoice
+librosa>=0.11
+soundfile>=0.12
+noisereduce>=3.0
+pyloudnorm>=0.1.1

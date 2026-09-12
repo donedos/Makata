@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Makata - Voice Cloning TTS</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --border: #262b38;
+    --text: #e6e9f0; --muted: #8b93a7; --accent: #f43f8e; --accent2: #7c5cff;
+    --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; padding: 2rem 1rem;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+  .layout { display: grid; gap: 1.25rem; }
+  @media (min-width: 980px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+    aside { position: sticky; top: 1rem; max-height: calc(100vh - 4rem); overflow-y: auto; }
+  }
+  .outs { display: flex; flex-direction: column; gap: .7rem; }
+  .out-item { background: #0d0f15; border: 1px solid var(--border); border-radius: 10px; padding: .65rem .75rem; }
+  .out-text {
+    font-size: .8rem; line-height: 1.45; color: var(--text);
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 3.9em; overflow: hidden; cursor: pointer;
+  }
+  .out-text.open { max-height: none; }
+  .out-meta { font-size: .72rem; color: var(--muted); margin-top: .35rem; display: flex; gap: .5rem; align-items: center; }
+  .out-del {
+    margin-left: auto; background: transparent; border: 1px solid #7f1d1d; color: var(--err);
+    border-radius: 8px; padding: .12rem .5rem; font-size: .72rem; cursor: pointer;
+  }
+  .out-del:hover { filter: brightness(1.4); }
+  .out-item audio { margin-top: .5rem; height: 34px; }
+  .empty-note { color: var(--muted); font-size: .82rem; }
+  header h1 { font-size: 1.6rem; letter-spacing: -0.02em; }
+  header h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header p { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin-bottom: .9rem; }
+  .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  button {
+    background: var(--accent); border: none; color: #fff; font-weight: 600;
+    padding: .65rem 1.2rem; border-radius: 10px; cursor: pointer; font-size: .9rem;
+    transition: filter .15s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  input[type=file], select, textarea {
+    background: #0d0f15; border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: .55rem .75rem; font-size: .9rem;
+  }
+  textarea { width: 100%; min-height: 110px; resize: vertical; line-height: 1.5; font-family: inherit; }
+  select { cursor: pointer; }
+  .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--err); display: inline-block; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .timer { font-variant-numeric: tabular-nums; font-size: .95rem; min-width: 4.5rem; }
+  .bar { flex: 1; height: 6px; background: #0d0f15; border-radius: 3px; overflow: hidden; min-width: 120px; }
+  .bar > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s linear; }
+  .msg { font-size: .82rem; margin-top: .75rem; white-space: pre-wrap; }
+  .msg.ok { color: var(--ok); } .msg.warn { color: var(--warn); } .msg.err { color: var(--err); } .msg.info { color: var(--muted); }
+  audio { width: 100%; margin-top: .75rem; }
+  .voices { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+  .chip {
+    background: #0d0f15; border: 1px solid var(--border); border-radius: 999px;
+    padding: .3rem .8rem; font-size: .78rem; cursor: pointer; color: var(--muted);
+  }
+  .chip.active { border-color: var(--accent); color: var(--text); }
+  label.small { font-size: .78rem; color: var(--muted); }
+  #dlgBackdrop {
+    position: fixed; inset: 0; background: rgba(5,7,12,.72); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 50; padding: 1rem;
+  }
+  .dlg {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    width: 100%; max-width: 440px; padding: 1.4rem;
+    display: flex; flex-direction: column; gap: .8rem;
+    box-shadow: 0 18px 60px rgba(0,0,0,.5);
+  }
+  .dlg h3 { font-size: 1rem; margin-bottom: .2rem; }
+  .dlg h3 span { color: var(--muted); font-weight: 400; font-size: .78rem; }
+  .dlg label { font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .dlg input[type=text] {
+    background: #0d0f15; border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: .6rem .75rem; font-size: .95rem; width: 100%;
+  }
+  .dlg button.danger { background: transparent; border: 1px solid #7f1d1d; color: var(--err); }
+  .dlg button.danger:hover:not(:disabled) { filter: brightness(1.4); }
+  .dlg hr { border: none; border-top: 1px solid var(--border); margin: .2rem 0; }
+  .dlg input[type=file] { width: 100%; font-size: .8rem; }
+  .dlg input[type=text].wide { width: 100%; font-size: .85rem; }
+  .dlg-samples { display: flex; flex-direction: column; gap: .45rem; max-height: 160px; overflow-y: auto; }
+  .sample-row {
+    font-size: .74rem; line-height: 1.35; color: var(--muted);
+    background: #0d0f15; border: 1px solid var(--border); border-radius: 8px; padding: .4rem .5rem;
+  }
+  .sample-row b { color: var(--text); font-weight: 600; word-break: break-word; }
+  .sample-row audio { width: 100%; height: 26px; margin-top: .3rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>Makata</span> · voice cloning TTS</h1>
+    <p>Zero-shot cloning via XTTS v2 — Tagalog / Taglish / English. Record or upload ~30s of clean speech.</p>
+  </header>
+
+  <div class="layout">
+    <div class="main">
+      <section>
+        <h2>1 · Voice reference</h2>
+    <div class="row" id="recRow">
+      <button id="recBtn">● Record</button>
+      <span class="timer" id="recTimer">0.0s</span>
+      <div class="bar"><div id="recBar"></div></div>
+      <span class="small">target 30s</span>
+    </div>
+    <div class="row" style="margin-top:.9rem">
+      <input type="file" id="fileInput" accept=".wav,.mp3,.m4a,.ogg,.flac,audio/*">
+      <input type="text" id="voiceName" placeholder="Name this voice (optional)" maxlength="64" style="flex:1;min-width:140px">
+      <button class="ghost" id="uploadBtn" disabled>Upload reference</button>
+    </div>
+    <input type="text" id="refTranscript" placeholder="Transcript of the recording (optional — improves OmniVoice cloning, skips Whisper auto-transcribe)" maxlength="500"
+           style="width:100%;margin-top:.6rem;background:#0d0f15;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:.55rem .75rem;font-size:.85rem">
+    <audio id="refPreview" controls style="display:none"></audio>
+    <div class="msg info" id="refMsg">No voice registered yet.</div>
+    <h2 style="margin-top:1.2rem">Registered voices</h2>
+    <div class="voices" id="voiceList"></div>
+  </section>
+
+  <section>
+    <h2>2 · Script &amp; synthesize</h2>
+    <textarea id="script" placeholder="I-type ang script dito... e.g. Kumusta! Ang halaga ay ₱125.50, at may 15% diskwento ngayong 2026-08-22."></textarea>
+    <div class="row" style="margin-top:.9rem">
+      <label class="small">Language</label>
+      <select id="lang">
+        <option value="auto" selected>Auto-detect (Taglish aware)</option>
+        <option value="tl">Tagalog / Filipino (native on · omni voices)</option>
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="pt">Portuguese</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="zh-cn">Chinese</option>
+        <option value="ja">Japanese</option>
+        <option value="ko">Korean</option>
+        <option value="hi">Hindi</option>
+        <option value="ar">Arabic</option>
+        <option value="tr">Turkish</option>
+        <option value="ru">Russian</option>
+        <option value="nl">Dutch</option>
+        <option value="pl">Polish</option>
+        <option value="cs">Czech</option>
+        <option value="hu">Hungarian</option>
+      </select>
+      <button id="synthBtn" disabled style="margin-left:auto">Generate speech</button>
+    </div>
+    <div class="msg info" id="synthMsg">First generation downloads the model (~1.8 GB) and loads it into memory.</div>
+        <audio id="outPlayer" controls style="display:none"></audio>
+      </section>
+    </div>
+
+    <aside>
+      <section>
+        <h2>Generated audio</h2>
+        <div id="outList" class="outs"><div class="empty-note">Loading…</div></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div id="dlgBackdrop">
+  <div class="dlg" role="dialog" aria-modal="true">
+    <h3>Edit voice <span id="dlgVid"></span></h3>
+    <label for="dlgName">Name</label>
+    <input type="text" id="dlgName" maxlength="64" autocomplete="off">
+    <hr>
+    <label>Reference clip</label>
+    <audio id="dlgRefAudio" controls preload="none"></audio>
+    <hr>
+    <label>Extra samples</label>
+    <div id="dlgSamples" class="dlg-samples"><span class="small">loading…</span></div>
+    <input type="file" id="dlgSampleFile" accept=".wav,.mp3,.m4a,.ogg,.flac,audio/*" style="margin-top:.2rem">
+    <input type="text" id="dlgSampleTranscript" class="wide" placeholder="Exact transcript of this clip (word-for-word — strongly recommended for Tagalog)" maxlength="500" autocomplete="off">
+    <div class="row" style="justify-content:flex-end;margin-top:-.2rem">
+      <span class="small" style="text-transform:none;letter-spacing:0">appends the clip &amp; rebuilds the clone prompt</span>
+      <button class="ghost" id="dlgAddSampleBtn" disabled>+ Add sample</button>
+    </div>
+    <div class="row" style="margin-top:.2rem">
+      <button class="ghost" id="dlgPreviewBtn">Preview synthesized</button>
+      <label class="small" style="text-transform:none;letter-spacing:0">speaks a short test line with this clone</label>
+    </div>
+    <audio id="dlgPrevAudio" controls preload="none" style="display:none"></audio>
+    <div class="msg info" id="dlgMsg"></div>
+    <div class="row" style="justify-content:space-between;margin-top:.4rem">
+      <button class="ghost danger" id="dlgDeleteBtn">Delete</button>
+      <div class="row">
+        <button class="ghost" id="dlgCancelBtn">Cancel</button>
+        <button id="dlgSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let selectedVoice = null, mediaRecorder = null, chunks = [], recStart = null, recTimerInt = null, pendingFile = null;
+let dlgVoiceId = null, dlgDeleteArmed = false;
+let voicesCache = [], outDeleteArmed = null;
+
+function setMsg(el, text, cls) { el.textContent = text; el.className = 'msg ' + (cls || 'info'); }
+
+function voiceNameOf(vid) {
+  const v = voicesCache.find(x => x.voice_id === vid);
+  return v ? (v.name || v.voice_id) : (vid ? vid.slice(0, 10) + '…' : '?');
+}
+
+async function loadOutputs() {
+  try {
+    const res = await fetch('/api/outputs');
+    const items = await res.json();
+    const list = $('outList');
+    list.innerHTML = '';
+    if (!items.length) { list.innerHTML = '<div class="empty-note">Nothing generated yet.</div>'; return; }
+    items.forEach(it => {
+      const d = document.createElement('div'); d.className = 'out-item';
+      const t = document.createElement('div'); t.className = 'out-text';
+      t.textContent = it.text || '(earlier generation — text not recorded)';
+      t.title = 'Click to expand / collapse';
+      t.onclick = () => t.classList.toggle('open');
+      const au = document.createElement('audio');
+      au.controls = true; au.preload = 'none'; au.src = it.audio_url;
+      const meta = document.createElement('div'); meta.className = 'out-meta';
+      const when = (it.created_at || '').replace('T', ' ').slice(5, 16);
+      const info = document.createElement('span');
+      info.textContent = `${it.language_used || '?'} · ${it.seconds ?? '?'}s · ${voiceNameOf(it.voice_id)} · ${when}`;
+      const del = document.createElement('button'); del.className = 'out-del'; del.textContent = '✕'; del.title = 'Delete this audio';
+      del.onclick = () => deleteOut(it.file, del);
+      meta.appendChild(info); meta.appendChild(del);
+      d.appendChild(t); d.appendChild(au); d.appendChild(meta);
+      list.appendChild(d);
+    });
+  } catch (e) { setMsg($('outList'), 'Failed to load outputs: ' + e.message, 'err'); }
+}
+
+async function deleteOut(file, btn) {
+  if (outDeleteArmed !== file) {
+    outDeleteArmed = file;
+    btn.textContent = 'sure?';
+    setTimeout(() => { if (outDeleteArmed === file) { btn.textContent = '✕'; outDeleteArmed = null; } }, 2500);
+    return;
+  }
+  outDeleteArmed = null;
+  try {
+    const res = await fetch('/api/outputs/' + encodeURIComponent(file), { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    loadOutputs();
+  } catch (e) { alert('Delete failed: ' + e.message); }
+}
+
+function openDlg(v) {
+  dlgVoiceId = v.voice_id;
+  dlgDeleteArmed = false;
+  $('dlgVid').textContent = v.voice_id;
+  $('dlgName').value = v.name || v.voice_id;
+  $('dlgRefAudio').src = '/api/voices/' + v.voice_id + '/reference';
+  $('dlgPrevAudio').style.display = 'none';
+  $('dlgPrevAudio').removeAttribute('src');
+  $('dlgPreviewBtn').disabled = false;
+  $('dlgSampleFile').value = '';
+  $('dlgSampleTranscript').value = '';
+  $('dlgAddSampleBtn').disabled = true;
+  setMsg($('dlgMsg'), '');
+  loadDlgSamples();
+  $('dlgDeleteBtn').textContent = 'Delete';
+  $('dlgBackdrop').style.display = 'flex';
+  $('dlgName').focus();
+  $('dlgName').select();
+}
+
+function closeDlg() {
+  ['dlgRefAudio', 'dlgPrevAudio'].forEach(id => $(id).pause());
+  document.querySelectorAll('#dlgSamples audio').forEach(a => a.pause());
+  $('dlgBackdrop').style.display = 'none';
+  dlgVoiceId = null;
+}
+
+function renderSamples(samples) {
+  const box = $('dlgSamples');
+  box.innerHTML = '';
+  if (!samples.length) {
+    box.innerHTML = '<span class="small">no extra samples — add clips below to sharpen pronunciation</span>';
+    return;
+  }
+  samples.forEach(s => {
+    const row = document.createElement('div'); row.className = 'sample-row';
+    const head = document.createElement('div');
+    const meta = document.createElement('b'); meta.textContent = `#${s.index} · ${s.duration ?? '?'}s · `;
+    head.appendChild(meta);
+    const txt = document.createElement('span');
+    txt.textContent = s.transcript ? `"${s.transcript}"` : '(no transcript)';
+    head.appendChild(txt);
+    const au = document.createElement('audio');
+    au.controls = true; au.preload = 'none'; au.src = s.audio_url;
+    row.appendChild(head); row.appendChild(au);
+    box.appendChild(row);
+  });
+}
+
+async function loadDlgSamples() {
+  if (!dlgVoiceId) return;
+  try {
+    const res = await fetch('/api/voices/' + dlgVoiceId + '/samples');
+    let data = null;
+    try { data = await res.json(); } catch { /* non-JSON (e.g. plain-text 500) */ }
+    if (!res.ok) throw new Error(
+      (data && typeof data.detail === 'string' && data.detail) || `HTTP ${res.status}`);
+    renderSamples(data.samples || []);
+  } catch (e) {
+    $('dlgSamples').innerHTML =
+      '<span class="small">failed to load samples: ' + e.message +
+      ' — if the error is "Not Found"/404, the running server predates the samples API; restart uvicorn.</span>';
+  }
+}
+
+async function addDlgSample() {
+  if (!dlgVoiceId) return;
+  const f = $('dlgSampleFile').files[0];
+  if (!f) { setMsg($('dlgMsg'), 'Pick an audio file first.', 'err'); return; }
+  $('dlgAddSampleBtn').disabled = true;
+  setMsg($('dlgMsg'), 'Preprocessing sample and rebuilding clone prompt…', 'info');
+  const fd = new FormData();
+  fd.append('file', f);
+  const t = $('dlgSampleTranscript').value.trim();
+  if (t) fd.append('transcript', t);
+  try {
+    const res = await fetch('/api/voices/' + dlgVoiceId + '/samples', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText);
+    let msg = `Sample added (${data.duration.toFixed(1)}s) · ${data.samples} total` +
+      ` · prompt ${data.rebuild.mode}, ${data.rebuild.used} clip(s) used`;
+    if (data.rebuild.dropped) msg += `, ${data.rebuild.dropped} dropped (prompt cap)`;
+    const cls = data.warnings && data.warnings.length ? 'warn' : 'ok';
+    if (data.warnings && data.warnings.length) msg += '\n⚠ ' + data.warnings.join('\n⚠ ');
+    setMsg($('dlgMsg'), msg, cls);
+    $('dlgSampleFile').value = '';
+    $('dlgSampleTranscript').value = '';
+    loadDlgSamples();
+    refreshVoices();
+  } catch (e) {
+    setMsg($('dlgMsg'), 'Add sample failed: ' + e.message, 'err');
+    $('dlgAddSampleBtn').disabled = false;
+  }
+}
+
+async function saveDlg() {
+  const name = $('dlgName').value.trim();
+  if (!name) { setMsg($('dlgMsg'), 'Name cannot be empty.', 'err'); return; }
+  try {
+    const res = await fetch('/api/voices/' + dlgVoiceId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : res.statusText);
+    refreshVoices();
+    closeDlg();
+  } catch (e) { setMsg($('dlgMsg'), 'Save failed: ' + e.message, 'err'); }
+}
+
+async function previewDlg() {
+  if (!dlgVoiceId) return;
+  $('dlgPreviewBtn').disabled = true;
+  setMsg($('dlgMsg'), 'Synthesizing preview...', 'info');
+  try {
+    const res = await fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Kumusta! This is a preview of this cloned voice.',
+        voice_id: dlgVoiceId,
+        language: 'auto',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+    const player = $('dlgPrevAudio');
+    player.src = data.audio_url;
+    player.style.display = 'block';
+    setMsg($('dlgMsg'), `Preview ready (${data.seconds}s, ${data.language_used}).`, 'ok');
+    loadOutputs();
+    player.play().catch(() => {});
+  } catch (e) { setMsg($('dlgMsg'), 'Preview failed: ' + e.message, 'err'); }
+  $('dlgPreviewBtn').disabled = false;
+}
+
+async function deleteDlg() {
+  if (!dlgVoiceId) return;
+  if (!dlgDeleteArmed) {
+    dlgDeleteArmed = true;
+    $('dlgDeleteBtn').textContent = 'Really delete?';
+    setMsg($('dlgMsg'), 'Click again to permanently remove this voice.', 'warn');
+    return;
+  }
+  try {
+    const res = await fetch('/api/voices/' + dlgVoiceId, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    if (selectedVoice === dlgVoiceId) {
+      selectedVoice = null;
+      $('synthBtn').disabled = true;
+    }
+    refreshVoices();
+    closeDlg();
+  } catch (e) { setMsg($('dlgMsg'), 'Delete failed: ' + e.message, 'err'); }
+}
+
+async function refreshVoices() {
+  const res = await fetch('/api/voices');
+  const voices = await res.json();
+  voicesCache = voices;
+  $('voiceList').innerHTML = '';
+  if (!voices.length) { $('voiceList').innerHTML = '<span class="small" style="color:var(--muted)">none yet</span>'; return; }
+  voices.forEach(v => {
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:inline-flex;gap:4px;align-items:center;';
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (selectedVoice === v.voice_id ? ' active' : '');
+    const engTag = v.engine ? ` · ${v.engine}` : '';
+    chip.textContent = (v.name || v.voice_id) + engTag;
+    chip.title = 'id: ' + v.voice_id + (v.engine ? `\nengine: ${v.engine}` : '')
+      + (v.samples != null ? `\nreference samples: ${v.samples}` : '');
+    chip.onclick = () => { selectedVoice = v.voice_id; $('synthBtn').disabled = false; refreshVoices(); };
+    const ren = document.createElement('button');
+    ren.className = 'chip';
+    ren.textContent = '✎';
+    ren.title = 'Edit voice — rename, listen, preview or delete';
+    ren.onclick = () => openDlg(v);
+    wrap.appendChild(chip); wrap.appendChild(ren);
+    $('voiceList').appendChild(wrap);
+  });
+}
+
+$('dlgSaveBtn').onclick = saveDlg;
+$('dlgCancelBtn').onclick = closeDlg;
+$('dlgPreviewBtn').onclick = previewDlg;
+$('dlgDeleteBtn').onclick = deleteDlg;
+$('dlgAddSampleBtn').onclick = addDlgSample;
+$('dlgSampleFile').onchange = () => { $('dlgAddSampleBtn').disabled = !$('dlgSampleFile').files[0]; };
+$('dlgName').addEventListener('keydown', e => { if (e.key === 'Enter') saveDlg(); });
+$('dlgBackdrop').addEventListener('click', e => { if (e.target === $('dlgBackdrop')) closeDlg(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('dlgBackdrop').style.display !== 'none') closeDlg();
+});
+['dlgRefAudio', 'dlgPrevAudio'].forEach(id => {
+  $(id).addEventListener('play', () => {
+    ['dlgRefAudio', 'dlgPrevAudio'].forEach(other => { if (other !== id) $(other).pause(); });
+  });
+});
+
+$('recBtn').onclick = async () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop(); return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    chunks = []; recStart = performance.now();
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(recTimerInt);
+      $('recBtn').textContent = '● Record'; $('recBtn').classList.remove('ghost');
+      const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      pendingFile = new File([blob], 'recording.webm', { type: blob.type });
+      $('uploadBtn').disabled = false;
+      $('refPreview').src = URL.createObjectURL(blob);
+      $('refPreview').style.display = 'block';
+      setMsg($('refMsg'), 'Recording captured. Review it, then click "Upload reference".', 'info');
+    };
+    mediaRecorder.start();
+    $('recBtn').textContent = '■ Stop'; $('recBtn').classList.add('ghost');
+    recTimerInt = setInterval(() => {
+      const s = (performance.now() - recStart) / 1000;
+      $('recTimer').textContent = s.toFixed(1) + 's';
+      $('recBar').style.width = Math.min(s / 30 * 100, 100) + '%';
+    }, 100);
+  } catch (e) { setMsg($('refMsg'), 'Mic access denied: ' + e.message, 'err'); }
+};
+
+$('fileInput').onchange = () => {
+  if ($('fileInput').files[0]) {
+    pendingFile = $('fileInput').files[0];
+    $('uploadBtn').disabled = false;
+    setMsg($('refMsg'), 'Ready to upload: ' + pendingFile.name, 'info');
+  }
+};
+
+$('uploadBtn').onclick = async () => {
+  if (!pendingFile) return;
+  $('uploadBtn').disabled = true;
+  setMsg($('refMsg'), 'Preprocessing (denoise, trim, loudness normalize)...', 'info');
+  const fd = new FormData();
+  fd.append('file', pendingFile);
+  const voiceName = $('voiceName').value.trim();
+  if (voiceName) fd.append('name', voiceName);
+  const transcript = $('refTranscript').value.trim();
+  if (transcript) fd.append('transcript', transcript);
+  try {
+    const res = await fetch('/api/upload-reference', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    selectedVoice = data.voice_id;
+    $('synthBtn').disabled = false;
+    $('voiceName').value = '';
+    $('refTranscript').value = '';
+    let msg = `Voice registered: "${data.name}" [${data.engine}] (${data.duration.toFixed(1)}s @ ${data.sample_rate} Hz) · id ${data.voice_id}`;
+    if (data.warnings && data.warnings.length) msg += '\n⚠ ' + data.warnings.join('\n⚠ ');
+    setMsg($('refMsg'), msg, data.warnings && data.warnings.length ? 'warn' : 'ok');
+    refreshVoices();
+  } catch (e) { setMsg($('refMsg'), 'Upload failed: ' + e.message, 'err'); $('uploadBtn').disabled = false; }
+};
+
+$('synthBtn').onclick = async () => {
+  const text = $('script').value.trim();
+  if (!text || !selectedVoice) return;
+  $('synthBtn').disabled = true;
+  setMsg($('synthMsg'), 'Synthesizing...', 'info');
+  try {
+    const res = await fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice_id: selectedVoice, language: $('lang').value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+    $('outPlayer').src = data.audio_url;
+    $('outPlayer').style.display = 'block';
+    $('outPlayer').play().catch(() => {});
+    loadOutputs();
+    setMsg($('synthMsg'),
+      `Done in ${data.language_used} · ${data.seconds}s audio · RTF ${data.rtf}\nNormalized: "${data.normalized_text}"`, 'ok');
+  } catch (e) { setMsg($('synthMsg'), 'Synthesis failed: ' + e.message, 'err'); }
+  $('synthBtn').disabled = false;
+};
+refreshVoices().then(loadOutputs);
+
+</script>
+</body>
+</html>
