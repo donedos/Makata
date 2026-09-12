@@ -31,8 +31,86 @@ pluggable engine system:
 
 ## Start Makata
 
-Requires **Python 3.10+** and **ffmpeg** on PATH
-(PyTorch with CUDA is pulled in automatically on Linux; on Windows see note below).
+Makata requires **Python 3.10+** and **ffmpeg** on `PATH`. Choose the setup
+for your operating system below, then use one of the Docker, pip, or dev
+checkout options.
+
+### Platform setup
+
+#### macOS
+
+Install [Homebrew](https://brew.sh/) if it is not already installed, then:
+
+```bash
+brew install python@3.11 ffmpeg
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+MAKATA_DEVICE=cpu makata check-setup
+MAKATA_DEVICE=cpu makata serve
+```
+
+Docker Desktop also works on Intel and Apple Silicon Macs:
+
+```bash
+docker compose up --build
+```
+
+macOS does not provide NVIDIA CUDA. The native setup therefore uses CPU mode;
+Apple Silicon GPU/MPS is not currently selected by Makata.
+
+#### Ubuntu Linux
+
+Install the system prerequisites:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip ffmpeg
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+makata check-setup
+makata serve
+```
+
+On an NVIDIA GPU, install a compatible NVIDIA driver and
+[`nvidia-container-toolkit`](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+for Docker GPU support. Linux PyTorch wheels include the CUDA runtime; use
+`MAKATA_DEVICE=cpu` if you want to force CPU mode.
+
+#### Windows
+
+Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/windows/)
+and select **Add Python to PATH** during installation. Install `ffmpeg` and
+add it to `PATH`, for example with [winget](https://learn.microsoft.com/windows/package-manager/winget/):
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+From PowerShell in the Makata checkout:
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e .
+makata check-setup
+makata serve
+```
+
+If PowerShell blocks activation, run `Set-ExecutionPolicy -Scope CurrentUser
+RemoteSigned` once, or invoke the environment directly with
+`.venv\Scripts\python.exe`. The standard Windows PyTorch install is CPU-only.
+For NVIDIA CUDA, install the matching PyTorch wheel before installing Makata:
+
+```powershell
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+python -m pip install -e .
+makata serve
+```
+
+Docker Desktop is another supported Windows option and runs CPU-only unless a
+separate compatible GPU configuration is available.
 
 ### Option A — Docker (easiest)
 
