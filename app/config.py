@@ -50,8 +50,16 @@ XTTS_LANGUAGES = [
     "nl", "cs", "ar", "zh-cn", "ja", "hu", "ko", "hi",
 ]
 
-TAGALOG_FALLBACK_LANG = os.getenv("MAKATA_TL_FALLBACK", "en")
+# XTTS has no Tagalog voice; tl text routes through a fallback phonemizer.
+# 'es' beats 'en' here: Filipino orthography is Spanish-derived (ñ, rolled r,
+# vowel set, ng) so the Spanish phonemizer reads it far closer to native.
+TAGALOG_FALLBACK_LANG = os.getenv("MAKATA_TL_FALLBACK", "es")
 DEVICE = os.getenv("MAKATA_DEVICE", "auto")
+
+# Rewrite known-mispronounced words into spoken Filipino before synthesis.
+PRON_LEX_ENABLED = os.getenv("MAKATA_PRON_LEX", "1").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 
 TEMPERATURE = 0.65
 TOP_P = 0.85

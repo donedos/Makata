@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app import config
 from app.audio.preprocess import preprocess_reference
+from app.text.drill import drill_pack
 from app.text.normalizer import detect_language, normalize_text
 from app.tts.engine import (
     EngineUnavailableError,
@@ -435,7 +436,20 @@ async def languages():
         "default_engine": config.DEFAULT_ENGINE,
         "xtts_languages": config.XTTS_LANGUAGES,
         "tagalog_note": "OmniVoice synthesizes Filipino (fil) natively — no fallback needed. "
-                        "XTTS v2 lacks Tagalog and routes tl text through "
-                        f"'{config.TAGALOG_FALLBACK_LANG}' phonemizer.",
+                        "XTTS v2 lacks Tagalog and routes tl text through the "
+                        f"'{config.TAGALOG_FALLBACK_LANG}' phonemizer "
+                        "(es = Spanish, orthography-aligned with Filipino; en is "
+                        "an alternative).",
         "tagalog_fallback": config.TAGALOG_FALLBACK_LANG,
     }
+
+
+@router.get("/drill-pack")
+async def drill_pack_read(count: int = 5):
+    """Pronunciation-drill sentences for sharpening a voice's clone prompt.
+
+    Each item is one short sentence to record and add as an extra sample via
+    POST /api/voices/{voice_id}/samples with the matching transcript. Ordered
+    by priority; `count` caps the number returned (default 5)."""
+    return {"pack": drill_pack(count), "hint": "Record each line aloud, then "
+            "add it as a sample with its exact transcript."}

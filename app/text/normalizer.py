@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from app.text.pronounce import apply_pronunciation_lexicon
+
 _ONES_EN = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
             "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
             "sixteen", "seventeen", "eighteen", "nineteen"]
@@ -203,6 +205,9 @@ def normalize_text(text: str, lang: str = "tl") -> str:
                         "@": "sa" if lang == "tl" else "at",
                         "₱": "", "%": ""}.items():
         text = text.replace(sym, spoken)
+
+    if lang == "tl":
+        text = apply_pronunciation_lexicon(text)
 
     text = _EMOJI_RE.sub("", text)
     text = "".join(c for c in text if c.isprintable() or c == "\n")

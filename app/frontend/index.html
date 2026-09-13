@@ -189,6 +189,11 @@
     <div id="dlgSamples" class="dlg-samples"><span class="small">loading…</span></div>
     <input type="file" id="dlgSampleFile" accept=".wav,.mp3,.m4a,.ogg,.flac,audio/*" style="margin-top:.2rem">
     <input type="text" id="dlgSampleTranscript" class="wide" placeholder="Exact transcript of this clip (word-for-word — strongly recommended for Tagalog)" maxlength="500" autocomplete="off">
+    <div class="row" style="margin-top:.35rem">
+      <button class="ghost" id="dlgDrillBtn" type="button">Pronunciation drill set</button>
+      <span class="small" style="text-transform:none;letter-spacing:0">read a line aloud → record it → click the line to set its transcript</span>
+    </div>
+    <div id="dlgDrillList" class="dlg-samples" style="display:none"></div>
     <div class="row" style="justify-content:flex-end;margin-top:-.2rem">
       <span class="small" style="text-transform:none;letter-spacing:0">appends the clip &amp; rebuilds the clone prompt</span>
       <button class="ghost" id="dlgAddSampleBtn" disabled>+ Add sample</button>
@@ -276,6 +281,7 @@ function openDlg(v) {
   $('dlgPreviewBtn').disabled = false;
   $('dlgSampleFile').value = '';
   $('dlgSampleTranscript').value = '';
+  $('dlgDrillList').style.display = 'none'; $('dlgDrillList').innerHTML = '';
   $('dlgAddSampleBtn').disabled = true;
   setMsg($('dlgMsg'), '');
   loadDlgSamples();
@@ -328,6 +334,33 @@ async function loadDlgSamples() {
       '<span class="small">failed to load samples: ' + e.message +
       ' — if the error is "Not Found"/404, the running server predates the samples API; restart uvicorn.</span>';
   }
+}
+
+function loadDrills() {
+  if (!dlgVoiceId) return;
+  const box = $('dlgDrillList');
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  fetch('/api/drill-pack?count=6')
+    .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+    .then(data => {
+      box.innerHTML = '';
+      (data.pack || []).forEach((d, i) => {
+        const row = document.createElement('div'); row.className = 'sample-row';
+        row.style.cursor = 'pointer';
+        const tag = document.createElement('b'); tag.textContent = d.tag + ' · ';
+        const txt = document.createElement('span'); txt.textContent = d.text;
+        row.title = d.why + (d.en ? '  (' + d.en + ')' : '') + '\nClick to set this line as the transcript.';
+        row.onclick = () => {
+          $('dlgSampleTranscript').value = d.text;
+          setMsg($('dlgMsg'), `Drill #${i + 1} set as transcript. Record this line and click "+ Add sample".`, 'info');
+        };
+        row.appendChild(tag); row.appendChild(txt);
+        box.appendChild(row);
+      });
+      box.style.display = 'block';
+      setMsg($('dlgMsg'), 'Read each line aloud while recording; after recording, click the line to set its transcript.', 'info');
+    })
+    .catch(e => setMsg($('dlgMsg'), 'Drill set failed: ' + e.message, 'err'));
 }
 
 async function addDlgSample() {
@@ -453,6 +486,7 @@ $('dlgCancelBtn').onclick = closeDlg;
 $('dlgPreviewBtn').onclick = previewDlg;
 $('dlgDeleteBtn').onclick = deleteDlg;
 $('dlgAddSampleBtn').onclick = addDlgSample;
+$('dlgDrillBtn').onclick = loadDrills;
 $('dlgSampleFile').onchange = () => { $('dlgAddSampleBtn').disabled = !$('dlgSampleFile').files[0]; };
 $('dlgName').addEventListener('keydown', e => { if (e.key === 'Enter') saveDlg(); });
 $('dlgBackdrop').addEventListener('click', e => { if (e.target === $('dlgBackdrop')) closeDlg(); });

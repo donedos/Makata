@@ -6,7 +6,7 @@ pluggable engine system:
 | Engine | Tagalog | Notes |
 |---|---|---|
 | **OmniVoice** (k2-fsa) — default | ✅ native `fil` (646 languages) | 0.6B diffusion-LM; weights CC-BY-NC (code Apache-2.0) |
-| XTTS v2 (Coqui) | ⚠️ via fallback phonemizer (`en`/`es`) | 17 languages; checkpoint CPML (non-commercial) |
+| XTTS v2 (Coqui) | ⚠️ via fallback phonemizer (`es`) | 17 languages; checkpoint CPML (non-commercial) |
 
 ```
 [mic/upload ref] → [preprocess: trim·denoise·-23 LUFS] → [engine prompt cache (.pt/.npz)]
@@ -15,8 +15,14 @@ pluggable engine system:
 
 ## Honest limitations (read first)
 
-- **OmniVoice Filipino is trained on ~8h of data** — pronunciation of rare words may
-  drift. A/B it against the XTTS route (both ship enabled) and pick per voice.
+- **Honest limitations:** OmniVoice Filipino is trained on ~8h of data — uncommon
+  words still drift. Makata mitigates this with a **per-word pronunciation
+  lexicon** (`app/text/pronounce.py`, toggle `MAKATA_PRON_LEX`) that rewrites
+  English-spelled words into spoken Filipino before synthesis, and with
+  **pronunciation-drill samples** (GET `/api/drill-pack`) you record and attach
+  to a voice. A/B an OmniVoice clone against the XTTS route (both ship enabled)
+  and pick per voice. Neither is a substitute for VoxCPM2-scale coverage (see
+  Roadmap).
 - Engines are **mutually exclusive in VRAM**: loading one unloads the other
   (~10–20s swap). On <8GB GPUs OmniVoice's audio codec runs on CPU automatically.
 - OmniVoice clones best from **3–20s references that end on a complete
@@ -227,6 +233,39 @@ First-run downloads from HuggingFace (cached after that):
 
 Run headless/CPU-only with `MAKATA_DEVICE=cpu` (much slower).
 
+## Updating to a new release
+
+Releases are tagged `vX.Y.Z` on GitHub (check with
+`git fetch --tags && git describe --tags`, or the GitHub Releases page).
+How you pull an upgrade depends on how Makata was installed:
+
+- **Dev checkout** (Option C):
+  ```bash
+  git pull origin main
+  pip install -e .   # only needed when dependencies changed (see pyproject.toml)
+  makata serve
+  ```
+- **Docker** (Option A):
+  ```bash
+  git pull origin main
+  docker compose up --build
+  ```
+  The `makata-data` volume is untouched by upgrades — registered voices,
+  reference samples, outputs and downloaded model weights all survive.
+- **pip / pipx** (Option B): a future PyPI release installs like any package:
+  ```bash
+  pip install -U makata     # or: pipx upgrade makata
+  ```
+  For a locally installed checkout, pull the code and reinstall:
+  ```bash
+  git pull origin main
+  pip install -U .
+  ```
+
+In every case the running server must be restarted to pick up code changes.
+Your voices and data are stored outside the code (`MAKATA_DATA_DIR` or the
+Docker volume), so they are never lost during an update.
+
 ## API
 
 | Endpoint | Description |
@@ -248,9 +287,10 @@ curl -X POST localhost:8300/api/synthesize -H 'Content-Type: application/json' \
 ```
 
 `auto` detects Tagalog vs English per request via stopword scoring (Taglish-friendly);
-numbers/currency/dates are expanded to words before synthesis. For OmniVoice voices,
-Tagalog text is synthesized natively; for XTTS voices it routes through
-`MAKATA_TL_FALLBACK`.
+numbers/currency/dates are expanded to words before synthesis, and known
+mispronounced words are rewritten via the Tagalog pronunciation lexicon
+(`MAKATA_PRON_LEX`). For OmniVoice voices, Tagalog text is synthesized
+natively; for XTTS voices it routes through `MAKATA_TL_FALLBACK`.
 
 ## Configuration (env vars)
 
@@ -262,7 +302,8 @@ Tagalog text is synthesized natively; for XTTS voices it routes through
 | `MAKATA_OMNI_NUM_STEP` | `32` | diffusion steps (16 = faster, lower fidelity) |
 | `MAKATA_OMNI_TARGET_REF` | `12` | preferred pause-cut length (seconds) for auto-transcribed references |
 | `MAKATA_OMNI_MAX_PROMPT` | `20` | total stitched clone-prompt length cap (seconds) when rebuilding from multiple samples |
-| `MAKATA_TL_FALLBACK` | `en` | XTTS phonemizer for Tagalog text |
+| `MAKATA_PRON_LEX` | `1` | rewrite known-mispronounced words (`app/text/pronounce.py`) into spoken Filipino before tl synthesis |
+| `MAKATA_TL_FALLBACK` | `es` | XTTS phonemizer for Tagalog text (`es` = Spanish, orthography-aligned with Filipino) |
 | `MAKATA_XTTS_MODEL` / `MAKATA_OMNI_MODEL` | xtts_v2 / k2-fsa/OmniVoice | swap checkpoints |
 
 In Docker all of the above can be set via `environment:` in `docker-compose.yml`
@@ -300,6 +341,10 @@ How each engine combines samples:
   corrupts the clone more than a missing transcript.
 - Write numbers, currency, dates, and abbreviations **as spoken**: audio says
   "*isang daan at dalawampung piso*" → transcribe exactly that, not "₱120".
+- **Use the pronunciation-drill set** (`GET /api/drill-pack`, or the
+  **Pronunciation drill set** button in ✎ Edit voice) and record the lines
+  that target your voice's weak spots (`mga`, `ng`, rolled `r`, `ñ`,
+  glottal-stop pairs like *bata/bata'*, English-spelled loanwords).
 - Keep proper nouns/technical terms in there if they mispronounce — that's
   precisely the vocabulary you want anchored.
 - 2–4 good transcript-backed samples usually beat 10 sloppy ones.
@@ -319,7 +364,7 @@ The response reports how the prompt was rebuilt:
 app/
   api/routes.py     FastAPI endpoints
   audio/            preprocess (trim · denoise · LUFS)
-  text/             Taglish normalizer, language detect
+  text/             Taglish normalizer, language detect, pronunciation lexicon, drill pack
   tts/engine.py     engine loader + clone-prompt cache
   frontend/         single-file web UI (ships inside the wheel)
   cli.py            makata serve / check-setup
@@ -330,6 +375,10 @@ Dockerfile, docker-compose.yml
 
 ## Roadmap
 
-- VoxCPM2 as a third engine (explicit Tagalog, Apache-2.0 — needs >4GB VRAM)
+- VoxCPM2 as a third engine (explicit Tagalog, Apache-2.0). **Not for
+  <4GB-RAM / <8GB-VRAM machines**: 2B params need ~8GB VRAM in PyTorch and,
+  even via the GGUF/ggml path (llama.cpp-omni; Acoustic ships F16-only,
+  ~3.3GB weights), ~8GB system RAM and a slow CPU. Excluded for this
+  deployment box.
 - Sentence-level Taglish mixing (route clauses to their best engine)
 - Streaming output, MP3 encoding
